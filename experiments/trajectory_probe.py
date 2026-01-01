@@ -546,15 +546,33 @@ def main():
     samples = generate_dataset(args.N)
     
     # 2. Load Model
-    print(f"Loading {args.model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True)
-    if not tokenizer.pad_token: tokenizer.pad_token = tokenizer.eos_token
+    print(f"Attempting to load model: {args.model_name}...")
     device = get_device()
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
-        device_map="auto" if device.type == "cuda" else None
-    )
+    
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=True, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+            device_map="auto" if device.type == "cuda" else None,
+            trust_remote_code=True
+        )
+    except (OSError, ValueError) as e:
+        print(f"Failed to load {args.model_name} (likely path not found). Error: {e}")
+        default_hf = "Qwen/Qwen2.5-7B-Instruct"
+        if args.model_name != default_hf:
+            print(f"Falling back to downloading default model from HuggingFace: {default_hf}")
+            tokenizer = AutoTokenizer.from_pretrained(default_hf, use_fast=True, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(
+                default_hf,
+                torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+                device_map="auto" if device.type == "cuda" else None,
+                trust_remote_code=True
+            )
+        else:
+            raise e
+
+    if not tokenizer.pad_token: tokenizer.pad_token = tokenizer.eos_token
     model.eval()
     
     # 3. Run Loop
