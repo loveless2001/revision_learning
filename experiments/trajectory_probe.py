@@ -43,7 +43,8 @@ class RunResult:
     revision_depth: int
     glyph_mass: float
     revision_potential: float
-    cosine_sim: float
+    cos_glyph_revise: float
+    cos_commit_revise: float
 
 def set_seed(seed: int = 0):
     random.seed(seed)
@@ -478,19 +479,20 @@ def run_sample(
         inject_vec = glyph_vec
         target_layer_idx = -1 
         
-    # SETUP INJECTOR
+    # SETUP INJECTOR & GENERATE
     injector = None
-    if inject_vec is not None and epsilon > 0:
-        injector = ResidualInjector(inject_vec, epsilon, [target_layer_idx], mode=inject_mode)
-        injector.register(model)
-        
+    revise_ans = ""
     try:
+        if inject_vec is not None and epsilon > 0:
+            injector = ResidualInjector(inject_vec, epsilon, [target_layer_idx], mode=inject_mode)
+            injector.register(model)
+        
         _, revise_ans = generate_text(model, tokenizer, prompt_revise, max_new_tokens=512, temperature=0.7, do_sample=True)
     finally:
         if injector:
             injector.remove()
 
-    # Calculate Revise Vector & Cosine Similarity
+    # Calculate Revise Vector & Cosine Similarities
     # We need to run forward pass on revise answer to get embeddings
     # We use the full context: prompt_revise + revise_ans
     revise_full_input = tokenizer(prompt_revise + revise_ans, return_tensors="pt")
@@ -507,9 +509,13 @@ def run_sample(
     else:
         revise_vec = hs_r[-1]
 
-    # Cosine Sim: Glyph vs Revise
+    # Metric 1: Glyph vs Revise (Did we follow the glyph direction?)
     # if high, it means revise followed the glyph direction (Double Down)
     cos_glyph_revise = float(torch.nn.functional.cosine_similarity(glyph_vec.unsqueeze(0), revise_vec.unsqueeze(0)).item())
+    
+    # Metric 2: Commit vs Revise (Surface level persistence)
+    # Did the output semantically align with the original commit answer?
+    cos_commit_revise = float(torch.nn.functional.cosine_similarity(commit_vec.unsqueeze(0), revise_vec.unsqueeze(0)).item())
             
     # Calculate Revision Potential (Similarity of PROMPT last token to glyph) -- existing logic
     p_ids = tokenizer(prompt_revise, return_tensors="pt").input_ids
@@ -534,7 +540,8 @@ def run_sample(
         revision_depth=depth,
         glyph_mass=glyph_mass,
         revision_potential=rev_pot,
-        cosine_sim=cos_glyph_revise
+        cos_glyph_revise=cos_glyph_revise,
+        cos_commit_revise=cos_commit_revise
     )
 
 def main():
@@ -615,11 +622,12 @@ def main():
     if args.output_file:
         with open(args.output_file, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["sample_id", "condition", "epsilon", "label", "depth", "mass", "rev_potential", "cosine_sim", "commit_text", "revise_text"])
+            writer.writerow(["sample_id", "condition", "epsilon", "label", "depth", "mass", "rev_potential", "cos_glyph", "cos_commit", "commit_text", "revise_text"])
             for r in results:
                 writer.writerow([
                     r.sample_id, r.condition, r.epsilon, r.label, r.revision_depth, 
-                    f"{r.glyph_mass:.4f}", f"{r.revision_potential:.4f}", f"{r.cosine_sim:.4f}",
+                    f"{r.glyph_mass:.4f}", f"{r.revision_potential:.4f}", 
+                    f"{r.cos_glyph_revise:.4f}", f"{r.cos_commit_revise:.4f}",
                     r.phase_texts["commit"][:50].replace("\n", " "), # truncate for readability
                     r.phase_texts["revise"][:100].replace("\n", " ")
                 ])
