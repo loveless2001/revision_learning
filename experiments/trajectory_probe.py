@@ -237,61 +237,47 @@ def aggregate_glyphs(glyphs: List[Glyph], d: int) -> Tuple[torch.Tensor, float]:
 
 class ResidualInjector:
     """
-    Adds epsilon * v (static vector) to block output for positions >= inject_start_pos.
-    Injects into a chosen layer index (default -3).
-    Stateful: tracks sequence length to handle generation step-by-step.
+    Adds epsilon * v (static vector) to block output.
+    Mode 'decode': Injects only when seq_len == 1 (generation steps).
+    Mode 'prefill': Injects only when seq_len > 1 (prompt processing).
     """
-    def __init__(self, v: torch.Tensor, epsilon: float, inject_start_pos: int, layer_indices: List[int]):
+    def __init__(self, v: torch.Tensor, epsilon: float, layer_indices: List[int], mode: str = "decode"):
         self.v = v.clone().to(torch.float32)
         self.eps = float(epsilon)
-        self.inject_start = int(inject_start_pos)
         self.layer_indices = layer_indices
+        self.mode = mode
         self.handles = []
-        self.current_seq_len = 0 
 
     def _make_hook(self):
-        # Closure state to track position per layer
-        state = {"step": 0}
-        
-        def safe_hook(module, input, output):
+        def hook(module, input, output):
             # output is typically (hidden_states, ...)
             if isinstance(output, tuple):
-                o = output[0] # [B, S, D]
+                o = output[0]
                 rest = output[1:]
             else:
                 o = output
                 rest = None
             
+            # o: [batch, seq, d]
             B, S, D = o.shape
             
-            # Current absolute position start
-            step = state["step"]
-            # Increment step for next call
-            state["step"] += S
-            
-            # Injection Logic
-            # Ensure v is same device and dtype as o (e.g. float16)
+            # Ensure v is same device and dtype
             v_vec = self.v.to(device=o.device, dtype=o.dtype).view(1, 1, -1)
             
-            # 1. Decode step (S=1): Simple check
-            if S == 1:
-                if step >= self.inject_start:
-                    o = o + self.eps * v_vec
+            should_inject = False
+            if self.mode == "decode" and S == 1:
+                should_inject = True
+            elif self.mode == "prefill" and S > 1:
+                should_inject = True
             
-            # 2. Prefill step (S > 1): Slice injection
-            else:
-                # We inject in range [step, step+S] where >= inject_start
-                # Relative start index in 'o':
-                rel_start = max(0, self.inject_start - step)
-                
-                if rel_start < S:
-                    o[:, rel_start:, :] = o[:, rel_start:, :] + self.eps * v_vec
+            if should_inject:
+                o = o + self.eps * v_vec
                 
             if rest is not None:
                 return (o,) + rest
             return o
             
-        return safe_hook
+        return hook
 
     def register(self, model):
         layers = None
@@ -307,10 +293,6 @@ class ResidualInjector:
             # handle negative index
             if idx < 0: idx += len(layers)
             if 0 <= idx < len(layers):
-                # We create a NEW hook closure for each layer
-                # Each closure has its own 'state' dict starting at 0
-                # This works because all layers process the same sequence stream in parallel (conceptually) or sequentially,
-                # but they all see the same cumulative lengths.
                 h = layers[idx].register_forward_hook(self._make_hook())
                 self.handles.append(h)
 
@@ -441,7 +423,7 @@ def run_sample(
     # Prepare Injection Vector
     inject_vec = None
     target_layer_idx = layer_index
-    inject_start_rel = 0 # Default: relative to revise prompt end
+    inject_mode = "decode" # Default: inject only on generated tokens
     
     # -- CONDITION LOGIC --
     if condition == "none":
@@ -485,17 +467,10 @@ def run_sample(
             
     # Wrong-time injection handling
     # If condition is specifically 'wrong_time' (or a variant), we shift timing.
-    # Current standard injection is "revise generation only" -> after prompt_revise end.
-    # Wrong time: Inject during prompt? Or during commit?
     if condition == "wrong_time":
         # Inject during revise PROMPT (before generation)
-        # We need to compute prompt length and inject from 0 to prompt_len?
-        # Standard Injector logic: injects for positions >= start_pos.
-        # If we set start_pos=0, it will affect the prompt processing (prefill) AND generation.
-        # "revise prompt tokens (before generation) instead of only generated tokens"
-        # Since we use KV cache, prefill is one step.
         inject_vec = glyph_vec
-        inject_start_rel = -9999 # Start at 0
+        inject_mode = "prefill"
         
     # Wrong-layer: Handled by layer_index argument in CLI, usually. 
     # But if condition is 'wrong_layer', forcing L-1
@@ -506,19 +481,7 @@ def run_sample(
     # SETUP INJECTOR
     injector = None
     if inject_vec is not None and epsilon > 0:
-        # Calculate start pos absolute
-        # We only have prompt_revise string. We need to tokenize it to get length.
-        p_ids = tokenizer(prompt_revise, return_tensors="pt").input_ids
-        p_len = p_ids.shape[1]
-        
-        # Standard: inject AFTER prompt (generated tokens)
-        final_start_pos = p_len 
-        
-        if condition == "wrong_time":
-            # Start at beginning of prompt
-            final_start_pos = 0
-            
-        injector = ResidualInjector(inject_vec, epsilon, final_start_pos, [target_layer_idx])
+        injector = ResidualInjector(inject_vec, epsilon, [target_layer_idx], mode=inject_mode)
         injector.register(model)
         
     try:

@@ -5,7 +5,7 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from prompts import xml_prompt, natural_prompt, glyph_prompt
 
-MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"  # change if needed
+MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct"  # change if needed
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_NEW_TOKENS = 512
 
