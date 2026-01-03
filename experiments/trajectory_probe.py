@@ -526,6 +526,9 @@ def run_sample(
             
         diff = (logits1 - logits0).abs().max().item()
         print(f"[Sanity] Max logit diff for {condition}: {diff:.6f}")
+        topk = torch.topk(logits1 - logits0, 5).indices.tolist()
+        print("Top shifted tokens:", tokenizer.convert_ids_to_tokens(topk))
+
 
     # SETUP INJECTOR & GENERATE
     injector = None
