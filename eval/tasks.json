@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "question": "If a train travels 60 km in 1.5 hours, what is its average speed in km/h?",
+    "answer": "40"
+  },
+  {
+    "id": 2,
+    "question": "What is 15% of 200?",
+    "answer": "30"
+  },
+  {
+    "id": 3,
+    "question": "Solve for x: 2x + 5 = 15",
+    "answer": "5"
+  },
+  {
+    "id": 4,
+    "question": "If you buy 3 books at $12 each and pay with a $50 bill, how much change do you get?",
+    "answer": "14"
+  },
+  {
+    "id": 5,
+    "question": "What is the area of a rectangle with length 8 and width 5?",
+    "answer": "40"
+  },
+  {
+    "id": 6,
+    "question": "Simplify: (4 + 2) * 3 - 5",
+    "answer": "13"
+  },
+  {
+    "id": 7,
+    "question": "If a car drives at 50 mph for 3 hours, how far does it travel?",
+    "answer": "150"
+  },
+  {
+    "id": 8,
+    "question": "What is the square root of 144?",
+    "answer": "12"
+  },
+  {
+    "id": 9,
+    "question": "If 5 apples cost $2.50, how much does 1 apple cost?",
+    "answer": "0.5"
+  },
+  {
+    "id": 10,
+    "question": "What is 20% of 150?",
+    "answer": "30"
+  },
+  {
+    "id": 11,
+    "question": "A box contains 4 red balls and 6 blue balls. What is the probability of picking a red ball?",
+    "answer": "0.4"
+  },
+  {
+    "id": 12,
+    "question": "Convert 120 minutes to hours.",
+    "answer": "2"
+  },
+  {
+    "id": 13,
+    "question": "What is the perimeter of a square with side length 6?",
+    "answer": "24"
+  },
+  {
+    "id": 14,
+    "question": "Solve: 100 / 4 + 5",
+    "answer": "30"
+  },
+  {
+    "id": 15,
+    "question": "If x = 3 and y = 4, what is x^2 + y^2?",
+    "answer": "25"
+  },
+  {
+    "id": 16,
+    "question": "A reduction of 20% on a $50 item results in a price of?",
+    "answer": "40"
+  },
+  {
+    "id": 17,
+    "question": "What is the mean of 2, 4, 6, 8, 10?",
+    "answer": "6"
+  },
+  {
+    "id": 18,
+    "question": "If you walk 2 km in 20 minutes, what is your speed in km/h?",
+    "answer": "6"
+  },
+  {
+    "id": 19,
+    "question": "What is 2^5?",
+    "answer": "32"
+  },
+  {
+    "id": 20,
+    "question": "Subtract 45 from 100.",
+    "answer": "55"
+  }
+]
